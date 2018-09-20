@@ -58,7 +58,7 @@ int pidOut_IMU = 0;
 float kp_v = 0.0;
 float ki_v = 0.0;
 float kd_v = 0.0;
-int pidOut_Speed = 0;
+float pidOut_Speed = 0;
 
 //bluetooth
 char foo[] = "000000";
@@ -380,6 +380,8 @@ void* function4(void* period)
 	int lastErrSpeed = 0;
 	float ITerm = 0.0;
 	int DTerm = 0;
+	float outMax = 30.0;
+	float outMin = -30.0;
 
     while (fl == 0) {
         // sem_wait(&sec_mutex);
@@ -404,9 +406,9 @@ void* function4(void* period)
 		DTerm = errSpeed - lastErrSpeed;	
 		//if(ITerm > outMax) ITerm = outMax;
 		//else if(ITerm < outMin) ITerm = outMin;			 
-		pidOut_Speed = round((kp_v * errSpeed) + ITerm + (kd_v * DTerm));			 
+		pidOut_Speed = (kp_v * errSpeed) + ITerm + (kd_v * DTerm);
 		
-		/*
+		
 		if (pidOut_Speed > outMax){
 			ITerm -= pidOut_Speed - outMax;
 			pidOut_Speed = outMax;
@@ -416,7 +418,6 @@ void* function4(void* period)
 			pidOut_Speed = outMin;
 		}
 		
-		*/
 		lastErrSpeed = errSpeed;
 		//printf("	pidOut_Speed  %d\n", pidOut_Speed );
 		
