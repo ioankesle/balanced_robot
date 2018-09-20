@@ -6,8 +6,9 @@ can be controlled from a smart phone via bluetooth.
 
 - Raspberry pi 3 model B
 - Arduino Duemilanove
-- Double BTS7960 43A H-bridge Motor Driver
 - IMU Sensor is the GY-521 MPU-6050
+- CJMCU-9306 PCA9306 2-Bit Bidirectional I2C Bus 
+- Double BTS7960 43A H-bridge Motor Driver
 - Dual USB Output DC-DC  Step Down Buck Power Module Module 9V/12V/24V/36V to 5V USB 3A
 - Motors are Pololu 12V 19:1 Metal Gearmotor 37Dx68L mm with 64 CPR Encoder
 - Wheels are Pololu 90×10mm
