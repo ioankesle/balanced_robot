@@ -9,7 +9,7 @@ can be controlled from a smart phone via bluetooth.
 - Double BTS7960 43A H-bridge Motor Driver
 - IMU Sensor is the GY-521 MPU-6050
 - Dual USB Output DC-DC  Step Down Buck Power Module Module 9V/12V/24V/36V to 5V USB 3A
-- Motors are 12V 19:1 Metal Gearmotor 37Dx68L mm with 64 CPR Encoder
+- Motors are Pololu 12V 19:1 Metal Gearmotor 37Dx68L mm with 64 CPR Encoder
 - Wheels are Pololu 90×10mm
 - The battery is DXF High Quality 11.1v 2700mAh 3S 30C LiPo Battery
 - F00872 Lipo Battery Voltage Tester Volt Meter Indicator Checker 
