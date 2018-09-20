@@ -419,7 +419,7 @@ int getParam()
         }
         break;
 
-    case 's': // adjust direction
+    case 'd': // adjust direction
         if (cmd == '+') {
             digitalWrite(InA1, LOW);
             digitalWrite(InB1, HIGH);
@@ -434,7 +434,7 @@ int getParam()
         }
         break;
 
-    case 'o': // user should type "oo"
+    case 's': // stop
         digitalWrite(InA1, LOW);
         digitalWrite(InB1, LOW);
         digitalWrite(InA2, LOW);
@@ -446,17 +446,4 @@ int getParam()
         Serial.println("???");
     }
 }
-/*
-int digital_smooth(int value, int *data_array)  {    // remove signal noise
-static int ndx=0;                                                        
-static int count=0;                          
-static int total=0;                          
- total -= data_array[ndx];              
- data_array[ndx] = value;                
- total += data_array[ndx];              
- ndx = (ndx+1) % NUMREADINGS;                                
- if(count < NUMREADINGS)      count++;
- return total/count;
-}
-*/
 
