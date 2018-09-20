@@ -16,9 +16,9 @@ can be controlled from a smart phone via bluetooth.
 
 ## Software
 
-I used/modified a part of MPU6050-Pi-Demo found at:
+I used/modified a part of MPU6050-Pi-Demo found at:  
 https://github.com/richardghirst/PiBits/tree/master/MPU6050-Pi-Demo
 
-I used the Android Bluetooth joystick app and some helpful functions found at:
+I used the Android Bluetooth joystick app and some helpful functions found at:  
 http://forum.arduino.cc/index.php?topic=173246.0
 
