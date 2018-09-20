@@ -23,5 +23,5 @@ https://github.com/richardghirst/PiBits/tree/master/MPU6050-Pi-Demo
 I used the Android Bluetooth joystick app and some helpful functions found at:  
 http://forum.arduino.cc/index.php?topic=173246.0
 
-I used/modified this class for i2c communication between Arduino and Raspberry Pi over the I2C bus found at:  
+I used/modified this class for i2c communication between Arduino and Raspberry Pi found at:  
 https://github.com/JohnnySheppard/Pi2c
