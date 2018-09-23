@@ -46,19 +46,19 @@ char input[2];
 
 //PID angle
 float angleNow = 0.0;
-float angle0 = 0.0;
+
 
 // PID IMU coeff
-float kp = 0.0; //5
+float kp = 13.5; //5
 float ki = 0.0;
-float kd = 0.0;
+float kd = 1.2;
 int pidOut_IMU = 0;
 
 // PID VEL coeff
 float kp_v = 0.0;
 float ki_v = 0.0;
 float kd_v = 0.0;
-float pidOut_Speed = 0;
+float pidOut_Speed = 0.0;
 
 //bluetooth
 char foo[] = "000000";
@@ -85,10 +85,10 @@ int fl = 0;
 int count = 0;
 //int flag= 0;
 
-long poll_thread1_period = 10000L; // poll speed every 10ms  arduino
-long poll_thread2_period = 10000L; // poll speed every 20ms  bluetooth
-long poll_thread3_period = 10000L; // poll speed every 10ms   IMU
-long poll_thread4_period = 10000L; // poll speed every 5ms  PID pitch
+long poll_thread1_period = 6000L; // poll speed every 10ms  IMU
+long poll_thread2_period = 6000L; // poll speed every 20ms  bluetooth
+long poll_thread3_period = 6000L; // poll speed every 10ms  PID pitch
+long poll_thread4_period = 10000L; // poll speed every 5ms  PID velocity
 
 int* getJoystickState(char data[8])
 {
@@ -180,8 +180,7 @@ void* function1(void* period)
     struct timespec timeoutStart, timeoutEnd;
     double mainTdiff = 0.0;
     long ps = *((long*)period);
-	int speedTarget1 = 0;
-	int speedTarget2 = 0;
+	float pitch;
 
 	
     while (fl == 0) {
@@ -191,21 +190,13 @@ void* function1(void* period)
         // Lock mutex and then wait for signal to relase mutex
         pthread_mutex_lock(&count_mutex);
 
-		
-	speedTarget1 = pidOut_IMU + (joyS[0]*5); // re-scale 0-100 ->  0-500
-	speedTarget2 = pidOut_IMU - (joyS[0]*5);
-		
-	if (speedTarget1 > 550) speedTarget1 = 550;
-	else if (speedTarget1 < -550) speedTarget1 = -550;
-	if (speedTarget2 > 550) speedTarget2 = 550;
-	else if (speedTarget2 < -550) speedTarget2 = -550;		
-		
-        
-	arduino.i2cWriteArduino2Int(speedTarget1, speedTarget2 );  // max 520
-	//printf("target1: %d	target2: %d \n", speedTarget1, speedTarget2);
-		
-        //Send an 8 bit integer
-        //arduino.i2cWriteArduinoInt(pidOut_IMU);
+		loop();
+        //yaw = get_yaw();
+        pitch = get_pitch();
+        //roll = get_roll();
+		angleNow = pitch;
+        //printf("pitch  %7.2f %7.2f %7.2f \n", yaw, pitch, roll);
+		//printf("angleNow %7.2f \n", angleNow);
 
         pthread_mutex_unlock(&count_mutex);
 
@@ -220,7 +211,7 @@ void* function1(void* period)
         }
         clock_gettime(CLOCK_REALTIME, &timeoutEnd);
         mainTdiff = (timeoutEnd.tv_sec - timeoutStart.tv_sec) + (timeoutEnd.tv_nsec - timeoutStart.tv_nsec) / 1E9;
-       // long time_elapsed = mainTdiff * 1000000L; //us
+        //long time_elapsed = mainTdiff * 1000000L; //us
 
         //printf( "Diff, Sleep, Elasped Time1: %lu, %lu, %lu \n", diff_us, sleep_us, time_elapsed);
     }
@@ -232,6 +223,7 @@ void* function2(void* period)
     struct timespec timeoutStart, timeoutEnd;
     double mainTdiff = 0.0;
     long ps = *((long*)period);
+	joyS[0] = 0;
 
     while (fl == 0) {
         //sem_wait(&sec_mutex);
@@ -273,7 +265,7 @@ void* function2(void* period)
         }
         clock_gettime(CLOCK_REALTIME, &timeoutEnd);
         mainTdiff = (timeoutEnd.tv_sec - timeoutStart.tv_sec) + (timeoutEnd.tv_nsec - timeoutStart.tv_nsec) / 1E9;
-       // long time_elapsed = mainTdiff * 1000000L; //us
+        //long time_elapsed = mainTdiff * 1000000L; //us
 
         //printf( "Diff, Sleep, Elasped Time2: %lu, %lu, %lu \n", diff_us, sleep_us, time_elapsed);
     }
@@ -287,16 +279,18 @@ void* function3(void* period)
     struct timespec timeoutStart, timeoutEnd;
     double mainTdiff = 0.0;
     long ps = *((long*)period);
-    float ITerm = 0.0;
-    float DTerm = 0.0;
-    int outMax = 550;
-    int outMin = -550;
-    float targetAngle = 3.4;
+	float ITerm = 0.0;
+	float DTerm = 0.0;
+	int outMax = 550;
+	int outMin = -550;
+	float targetAngle = 0.0;
+	float angleZero = 1.0;
 
-    float errAngle = 0.0;
-    float lastErrAngle = 0.0;
+	float errAngle = 0.0;
+	float lastErrAngle = 0.0;
 	
-    float pitch;
+	int speedTarget1 = 0;
+	int speedTarget2 = 0;
 
     while (fl == 0) {
         // sem_wait(&sec_mutex);
@@ -305,25 +299,18 @@ void* function3(void* period)
         // Lock mutex and then wait for signal to relase mutex
         pthread_mutex_lock(&count_mutex);
 		
-		loop();
-        //yaw = get_yaw();
-        pitch = get_pitch();
-        //roll = get_roll();
-		angleNow = pitch;
-        //printf("pitch  %7.2f %7.2f %7.2f \n", yaw, pitch, roll);
-		printf("angleNow %7.2f \n", angleNow);
-		
-		if ((angleNow - angle0) > 30.0 || (angleNow - angle0) < -30.0) {
+		if ( ((angleNow > 0) && (angleNow - angleZero) > 30.0) || ((angleNow < 0) &&  (angleNow + angleZero) < -30.0) ) {
 				
-			DTerm = 0.0;
-			ITerm = 0.0;
-			pidOut_IMU = 0;
-			//pidOut_V = 0.0;
-			//printf("	pidOut_IMU_off  %d\n", pidOut_IMU );
+				DTerm = 0.0;
+				ITerm = 0.0;
+				pidOut_IMU = 0;
+				pidOut_Speed = 0.0;
+				//printf("	pidOut_IMU_off  %d\n", pidOut_IMU );
 		}
 		else{
 			
-			//static float ITerm;                                 
+			targetAngle = angleZero - pidOut_Speed ;
+
 			errAngle = angleNow - targetAngle;				
 			ITerm += (ki * errAngle);
 			DTerm = errAngle - lastErrAngle;	
@@ -342,10 +329,104 @@ void* function3(void* period)
 			
 			lastErrAngle = errAngle;
 			//angleLast = angleNow;
-			printf("	pidOut_IMU  %d\n", pidOut_IMU );
+			//printf("	pidOut_IMU  %d\n", pidOut_IMU );
 		}
 		
+		
+		speedTarget1 = pidOut_IMU + (joyS[0]*5); // re-scale 0-100 ->  0-500
+		speedTarget2 = pidOut_IMU - (joyS[0]*5);
+		
+		if (speedTarget1 > 550) speedTarget1 = 550;
+		else if (speedTarget1 < -550) speedTarget1 = -550;
+		if (speedTarget2 > 550) speedTarget2 = 550;
+		else if (speedTarget2 < -550) speedTarget2 = -550;		
+		
+        
+		arduino.i2cWriteArduino2Int(speedTarget1, speedTarget2 );  // max 520
+		//printf("target1: %d	target2: %d \n", speedTarget1, speedTarget2);
+		
+        //Send an 8 bit integer
+        //arduino.i2cWriteArduinoInt(pidOut_IMU);
 
+        pthread_mutex_unlock(&count_mutex);
+
+        clock_gettime(CLOCK_REALTIME, &timeoutEnd);
+        mainTdiff = (timeoutEnd.tv_sec - timeoutStart.tv_sec) + (timeoutEnd.tv_nsec - timeoutStart.tv_nsec) / 1E9; //sec
+        long diff_us = mainTdiff * 1000000L; //us
+        long sleep_us = ps - diff_us; //- 165L;
+
+        if (sleep_us > 0) {
+            timespec_add_us(&timeoutEnd, sleep_us);
+            clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &timeoutEnd, NULL);
+        }
+        clock_gettime(CLOCK_REALTIME, &timeoutEnd);
+        mainTdiff = (timeoutEnd.tv_sec - timeoutStart.tv_sec) + (timeoutEnd.tv_nsec - timeoutStart.tv_nsec) / 1E9;
+        //long time_elapsed = mainTdiff * 1000000L; //us
+
+        //printf( "Diff, Sleep, Elasped Time3: %lu, %lu, %lu \n", diff_us, sleep_us, time_elapsed);
+		
+    }
+    return NULL;
+}
+
+void* function4(void* period)
+{
+
+    struct timespec timeoutStart, timeoutEnd;
+    double mainTdiff = 0.0;
+    long ps = *((long*)period);
+
+	int speedNow = 0;
+	int targetSpeed = 0;
+	int errSpeed;
+	int lastErrSpeed = 0;
+	float ITerm = 0.0;
+	int DTerm = 0;
+	float outMax = 30.0;
+	float outMin = -30.0;
+
+	
+	receive[0] = 0;
+	joyS[1] = 0;
+
+    while (fl == 0) {
+        // sem_wait(&sec_mutex);
+        clock_gettime(CLOCK_REALTIME, &timeoutStart);
+
+        // Lock mutex and then wait for signal to relase mutex
+        pthread_mutex_lock(&count_mutex);
+		
+		//Receive from the Arduino and put the contents into the "receive" char array
+        receive = arduino.i2cReadArduinoInt();
+		
+        //Print out what the Arduino is sending...
+        //printf("rcv1: %d \n", receive[0]);
+		
+		speedNow = receive[0];
+		targetSpeed = joyS[1]*5;
+		
+		//printf("target speed: %d speed now: %d \n", targetSpeed , speedNow);
+		                            
+		errSpeed = speedNow - targetSpeed;				
+		ITerm += (ki_v * errSpeed);
+		DTerm = errSpeed - lastErrSpeed;	
+		//if(ITerm > outMax) ITerm = outMax;
+		//else if(ITerm < outMin) ITerm = outMin;			 
+		pidOut_Speed = (kp_v * errSpeed) + ITerm + (kd_v * DTerm);
+		
+		
+		if (pidOut_Speed > outMax){
+			ITerm -= pidOut_Speed - outMax;
+			pidOut_Speed = outMax;
+		}
+		else if (pidOut_Speed < outMin){
+			ITerm += outMin - pidOut_Speed;
+			pidOut_Speed = outMin;
+		}
+		
+		lastErrSpeed = errSpeed;
+		//printf("	pidOut_Speed  %d\n", pidOut_Speed );
+		
         pthread_mutex_unlock(&count_mutex);
 
         clock_gettime(CLOCK_REALTIME, &timeoutEnd);
@@ -362,80 +443,6 @@ void* function3(void* period)
       //  long time_elapsed = mainTdiff * 1000000L; //us
 
         //printf( "Diff, Sleep, Elasped Time4: %lu, %lu, %lu \n", diff_us, sleep_us, time_elapsed);
-		
-    }
-    return NULL;
-}
-
-void* function4(void* period)
-{
-
-    struct timespec timeoutStart, timeoutEnd;
-    double mainTdiff = 0.0;
-    long ps = *((long*)period);
-
-    int speedNow = 0;
-    int targetSpeed = 0;
-    int errSpeed;
-    int lastErrSpeed = 0;
-    float ITerm = 0.0;
-    int DTerm = 0;
-    float outMax = 30.0;
-    float outMin = -30.0;
-
-    while (fl == 0) {
-        // sem_wait(&sec_mutex);
-        clock_gettime(CLOCK_REALTIME, &timeoutStart);
-
-        // Lock mutex and then wait for signal to relase mutex
-        pthread_mutex_lock(&count_mutex);
-		
-		//Receive from the Arduino and put the contents into the "receive" char array
-        receive = arduino.i2cReadArduinoInt();
-		
-        //Print out what the Arduino is sending...
-        //printf("rcv1: %d \n", receive[0]);
-		
-	speedNow = receive[0];
-	targetSpeed = joyS[1]*5;
-		
-	//printf("target speed: %d speed now: %d \n", targetSpeed , speedNow);
-		                            
-	errSpeed = speedNow - targetSpeed;				
-	ITerm += (ki_v * errSpeed);
-	DTerm = errSpeed - lastErrSpeed;	
-	//if(ITerm > outMax) ITerm = outMax;
-	//else if(ITerm < outMin) ITerm = outMin;			 
-	pidOut_Speed = (kp_v * errSpeed) + ITerm + (kd_v * DTerm);
-	
-	if (pidOut_Speed > outMax){
-		ITerm -= pidOut_Speed - outMax;
-		pidOut_Speed = outMax;
-	}
-	else if (pidOut_Speed < outMin){
-		ITerm += outMin - pidOut_Speed;
-		pidOut_Speed = outMin;
-	}
-		
-	lastErrSpeed = errSpeed;
-	//printf("	pidOut_Speed  %d\n", pidOut_Speed );
-		
-        pthread_mutex_unlock(&count_mutex);
-
-        clock_gettime(CLOCK_REALTIME, &timeoutEnd);
-        mainTdiff = (timeoutEnd.tv_sec - timeoutStart.tv_sec) + (timeoutEnd.tv_nsec - timeoutStart.tv_nsec) / 1E9; //sec
-        long diff_us = mainTdiff * 1000000L; //us
-        long sleep_us = ps - diff_us; //- 165L;
-
-        if (sleep_us > 0) {
-            timespec_add_us(&timeoutEnd, sleep_us);
-            clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &timeoutEnd, NULL);
-        }
-        clock_gettime(CLOCK_REALTIME, &timeoutEnd);
-        mainTdiff = (timeoutEnd.tv_sec - timeoutStart.tv_sec) + (timeoutEnd.tv_nsec - timeoutStart.tv_nsec) / 1E9;
-      //  long time_elapsed = mainTdiff * 1000000L; //us
-
-        //printf( "Diff, Sleep, Elasped Time3: %lu, %lu, %lu \n", diff_us, sleep_us, time_elapsed);
     }
     return NULL;
 }
@@ -523,14 +530,14 @@ int main(int argc, char* argv[])
     pthread_attr_setschedparam(&my_attr, &param);
     chk = pthread_create(&thread3, &my_attr, &function3, &poll_thread3_period);
     if (chk) {
-        printf("unable to create poll thread2");
+        printf("unable to create poll thread3");
     }
 
     param.sched_priority = 5;
     pthread_attr_setschedparam(&my_attr, &param);
     chk = pthread_create(&thread4, &my_attr, &function4, &poll_thread4_period);
     if (chk) {
-        printf("unable to create poll thread2");
+        printf("unable to create poll thread4");
     }
 
     printf("Entered \n");
@@ -539,11 +546,11 @@ int main(int argc, char* argv[])
         scanf("%s", input);
         //printf("Entered %s\n", input);
         if (strcmp(input, "p+") == 0) {
-            kp += 1;
+            kp += 0.1;
             printf("kp = %f\n", kp);
         }
         else if (strcmp(input, "p-") == 0) {
-            kp -= 1;
+            kp -= 0.1;
             printf("kp = %f\n", kp);
         }
 
