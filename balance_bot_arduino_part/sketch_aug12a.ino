@@ -1,7 +1,6 @@
 #include <Wire.h>
 
 #define SLAVE_ADDRESS 0x04 // arduino slave addr
-
 #define InA1 7 // INA motor pin
 #define InB1 8 // INB motor pin
 #define PWM1 9 // PWM motor pin
@@ -14,16 +13,8 @@
 #define encodPinA2 2 // encoder A pin
 #define encodPinB2 5 // encoder B pin
 
-//#define Vpin            0                   // battery monitoring analog pin
-//#define Apin            1                  // motor current monitoring analog pin
-
-//#define CURRENT_LIMIT   1000                     // high current warning
-//#define LOW_BAT         10000                   // low bat warning
 #define LOOPTIME 5000 // PID loop time
-//#define NUMREADINGS     10                      // samples for Amp average
 
-//int readings1[NUMREADINGS];
-//int readings2[NUMREADINGS];
 unsigned long lastMilli = 0; // loop timing
 unsigned long lastMilliPrint = 0; // loop timing
 int speed_req1 = 0; // speed (Set Point)
@@ -60,7 +51,7 @@ void setup()
 
     // initialize i2c as slave
     Wire.begin(SLAVE_ADDRESS);
-	  Wire.setClock(100000L);
+	  Wire.setClock(60000L);
     // define callbacks for i2c communication
     Wire.onReceive(receiveData);
     Wire.onRequest(sendData);
