@@ -60,7 +60,7 @@ int16_t* Pi2c::i2cReadArduinoInt(){
 	return retval;
 }
 
-int Pi2c::i2cWriteArduinoInt(int input){
+int Pi2c::i2cWriteArduinoInt(int16_t input){
 	const int arr_size = 2;
 	char tmp[arr_size]; //We know an Arduino Int is 2 Bytes.
 	int retval = 0;
@@ -72,7 +72,7 @@ int Pi2c::i2cWriteArduinoInt(int input){
 	return retval;
 }
 
-int Pi2c::i2cWriteArduino2Int(int input1, int input2){
+int Pi2c::i2cWriteArduino2Int(int16_t input1, int16_t input2){
 	const int arr_size = 4;
 	char tmp[arr_size]; //We know an Arduino Int is 2 Bytes.
 	//int retval, retval1, retval2 = 0;
