@@ -289,8 +289,8 @@ void* function3(void* period)
 	float errAngle = 0.0;
 	float lastErrAngle = 0.0;
 	
-	int speedTarget1 = 0;
-	int speedTarget2 = 0;
+	int16_t speedTarget1 = 0;
+	int16_t speedTarget2 = 0;
 
     while (fl == 0) {
         // sem_wait(&sec_mutex);
