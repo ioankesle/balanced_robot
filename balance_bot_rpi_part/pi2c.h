@@ -54,7 +54,7 @@ class Pi2c {
 		
 		//Function: i2cWrite - First parameter the int to send to the array.
 		//...Returns: Error value. > 0 is ok. < 0 means there was an error.
-		int i2cWriteArduinoInt(int input);
-		int i2cWriteArduino2Int(int input1, int input2);
+		int i2cWriteArduinoInt(int16_t input);
+		int i2cWriteArduino2Int(int16_t input1, int16_t input2);
 		
 };
