@@ -1,6 +1,7 @@
 #include <Wire.h>
 
 #define SLAVE_ADDRESS 0x04 // arduino slave addr
+
 #define InA1 7 // INA motor pin
 #define InB1 8 // INB motor pin
 #define PWM1 9 // PWM motor pin
@@ -21,19 +22,19 @@ int speed_req1 = 0; // speed (Set Point)
 int speed_req2 = 0; 
 //int speed_act1 = 0;                              // speed (actual value)
 //int speed_act2 = 0;
-int PWM_val1 = 0; // (25% = 64; 50% = 127; 75% = 191; 100% = 255)
+int PWM_val1 = 0;
 int PWM_val2 = 0;
 
 //volatile long count1 = 0;                        // rev counter
 //volatile long count2 = 0;                        // rev counter
 
-float Kp1 = 0.055; // PID proportional control Gain  0.1
-//float Ki1 =   0.0;                         // PID Derivitave control gain  0.03
-float Kp2 = 0.053; // PID proportional control Gain  0.1
-//float Ki2 =   0.0;                           // 0.03
+float Kp1 = 0.052; // PID proportional control Gain  0.1
+float Ki1 = 0.00001;                         // PID Derivitave control gain  0.03
+float Kp2 = 0.046; // PID proportional control Gain  0.1
+float Ki2 = 0.00001;                           // 0.03
 
-//float outMax = 255.0;
-//float outMin = 0.0;
+float outMax = 255.0;
+float outMin = 0.0;
 
 byte receivedCommands[4] = { 0 };
 
@@ -51,7 +52,7 @@ void setup()
 
     // initialize i2c as slave
     Wire.begin(SLAVE_ADDRESS);
-	  Wire.setClock(60000L);
+	Wire.setClock(60000L);
     // define callbacks for i2c communication
     Wire.onReceive(receiveData);
     Wire.onRequest(sendData);
@@ -94,52 +95,52 @@ void setup()
 void loop()
 {
     sei(); // enable interupts
-    //getParam();                                               // check keyboard
-    getMotorData();
+   // getParams();                                               // check keyboard
+    MotorData();
 
     if ((micros() - lastMilli) >= LOOPTIME) { // enter tmed loop
         lastMilli = micros();
 
         cli();
-       // speed_req = -50;
         PWM_val1 = updatePid1(PWM_val1, speed_req1, rpm1); // compute PWM value
-        PWM_val2 = updatePid2(PWM_val2, speed_req2, rpm2); // compute PWM value
-        //PWM_val1= 0;
-        //PWM_val2= 0;
-        /*
-		Serial.print("PWM VAL: ");
-        Serial.print(PWM_val1);
-        Serial.print(", ");
-		Serial.print(PWM_val2);
-        Serial.print(" ");
-        Serial.print("SPED REQ: ");
-        Serial.println(speed_req);
-        */
+        PWM_val2 = updatePid2(PWM_val2, speed_req2, rpm2); // compute PWM value  
         
         if ((speed_req1 > 0) && (speed_req1 <= 550)) {
-            digitalWrite(InA1, LOW);
-            digitalWrite(InB1, HIGH);
+            //digitalWrite(InA1, HIGH);
+            PORTD |= B10000000;	
+            //digitalWrite(InB1, LOW);      
+            PORTB &= B11111110;
         }
         else if ((speed_req1 < 0) && (speed_req1 >= -550))  {
-            digitalWrite(InA1, HIGH);
-            digitalWrite(InB1, LOW);
+            //digitalWrite(InA1, LOW);
+            PORTD &= B01111111;
+            //digitalWrite(InB1, HIGH);
+            PORTB |= B00000001;
         }
         else {
-            digitalWrite(InA1, LOW);
-            digitalWrite(InB1, LOW);
+            //digitalWrite(InA1, LOW);
+            PORTD &= B01111111;
+            //digitalWrite(InB1, LOW);
+            PORTB &= B11111110;
         }
 				
         if ((speed_req2 > 0) && (speed_req2 <= 550)) {
-            digitalWrite(InA2, HIGH);
-            digitalWrite(InB2, LOW);
+            //digitalWrite(InA2, LOW);
+            PORTD &= B10111111;
+            //digitalWrite(InB2, HIGH);
+            PORTD |= B00010000;
         }
         else if ((speed_req2 < 0) && (speed_req2 >= -550))  {
-            digitalWrite(InA2, LOW);
-            digitalWrite(InB2, HIGH);
+            //digitalWrite(InA2, HIGH);
+            PORTD |= B01000000;
+            //digitalWrite(InB2, LOW);
+            PORTD &= B11101111;
         }
         else {
-            digitalWrite(InA2, LOW);
-            digitalWrite(InB2, LOW);
+            //digitalWrite(InA2, LOW);
+            PORTD &= B10111111;
+            //digitalWrite(InB2, LOW);
+            PORTD &= B11101111;
         }
 
         analogWrite16(PWM1, PWM_val1);
@@ -158,7 +159,7 @@ void loop()
         sei();
     }
 
-    //printMotorInfo();             // display data
+   // printInfo();             // display data
 }
 
 int speed_av( int rpmw1 , int rpmw2){
@@ -229,7 +230,7 @@ void receiveData(int byteCount)
     */
 	
     speed_req1 = s1;
-	  speed_req2 = s2;
+	speed_req2 = s2;
 }
 
 // callback for sending data
@@ -252,7 +253,7 @@ void sendData()
 }
 
 
-void getMotorData()
+void MotorData()
 {
     /*                                         // calculate speed, volts and Amps
  static long countAnt1 = 0;
@@ -297,18 +298,18 @@ int updatePid1(int command, int targetValue, int currentValue)
 { // compute PWM value
     float pidTerm = 0; // PID correction
     int error = 0;
-    //static float ITerm;
+    static float ITerm = 0;
 
     error = abs(targetValue) - abs(currentValue);
-    // ITerm += (Ki1 * error);
-    // if(ITerm > outMax) ITerm = outMax;
-    // else if(ITerm < outMin) ITerm = outMin;
+    ITerm += Ki1 * error;
+    if(ITerm > outMax) ITerm = outMax;
+    else if(ITerm < outMin) ITerm = outMin;
 
-    pidTerm = (Kp1 * error); // + ITerm;
-    if (pidTerm > 0)
-        pidTerm += 0.5;
-    else if (pidTerm < 0)
-        pidTerm -= 0.5;
+    pidTerm = (Kp1 * error) + ITerm;
+   // if (pidTerm > 0)
+    pidTerm += 0.5;
+   // else if (pidTerm < 0)
+   //     pidTerm -= 0.5;
 
     return constrain(command + int(pidTerm), 0, 1023);
 }
@@ -317,25 +318,25 @@ int updatePid2(int command, int targetValue, int currentValue)
 { // compute PWM value
     float pidTerm = 0; // PID correction
     int error = 0;
-    //static float ITerm;
+    static float ITerm = 0;
 
     error = abs(targetValue) - abs(currentValue);
-    // ITerm += (Ki2 * error);
-    // if(ITerm > outMax) ITerm = outMax;
-    // else if(ITerm < outMin) ITerm = outMin;
+    ITerm += (Ki2 * error);
+    if(ITerm > outMax) ITerm = outMax;
+    else if(ITerm < outMin) ITerm = outMin;
 
     pidTerm = (Kp2 * error); // + ITerm;
-    if (pidTerm > 0)
-        pidTerm += 0.5;
-    else if (pidTerm < 0)
-        pidTerm -= 0.5;
+   /// if (pidTerm > 0)
+    pidTerm += 0.5;
+    //else if (pidTerm < 0)
+    //    pidTerm -= 0.5;
 
     return constrain(command + int(pidTerm), 0, 1023);
 }
 
-void printMotorInfo()
-{ // display data
-    if ((millis() - lastMilliPrint) >= 100) {
+void printInfo()
+{
+    if ((millis() - lastMilliPrint) >= 10) {
         lastMilliPrint = millis();
         Serial.print("SP1:");
         Serial.print(speed_req1);
@@ -383,16 +384,14 @@ void rencoder2()
     }
 }
 
-int getParam()
+int getParams()
 {
     char param, cmd;
-    if (!Serial.available())
-        return 0;
+    if (!Serial.available()) return 0;
     delay(10);
-    param = Serial.read(); // get parameter byte
-    if (!Serial.available())
-        return 0;
-    cmd = Serial.read(); // get command byte
+    param = Serial.read();
+    if (!Serial.available()) return 0;
+    cmd = Serial.read();
     Serial.flush();
     switch (param) {
     case 'v': // adjust speed
@@ -410,7 +409,7 @@ int getParam()
         }
         break;
 
-    case 'd': // adjust direction
+    case 's': // adjust direction
         if (cmd == '+') {
             digitalWrite(InA1, LOW);
             digitalWrite(InB1, HIGH);
@@ -425,7 +424,7 @@ int getParam()
         }
         break;
 
-    case 's': // stop
+    case 'o': // user should type "oo"
         digitalWrite(InA1, LOW);
         digitalWrite(InB1, LOW);
         digitalWrite(InA2, LOW);
@@ -433,8 +432,22 @@ int getParam()
         speed_req1 = 0;
         speed_req2 = 0;
         break;
+		
+    case 'p': // adjust direction
+        if (cmd == '+') Kp2 += 0.001;
+        if (cmd == '-') Kp2 -= 0.001;
+        Serial.print("                  Kp1: ");
+        Serial.println(Kp2,3);
+        break;
+		
+    case 'i': // adjust direction
+        if (cmd == '+') Ki2 += 0.00001;
+        if (cmd == '-') Ki2 -= 0.00001;
+        Serial.print("                  Ki1: ");
+        Serial.println(Ki2,5);
+        break;
+		
     default:
         Serial.println("???");
     }
 }
-
