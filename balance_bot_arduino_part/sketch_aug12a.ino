@@ -28,10 +28,10 @@ int PWM_val2 = 0;
 //volatile long count1 = 0;                        // rev counter
 //volatile long count2 = 0;                        // rev counter
 
-float Kp1 = 0.052; // PID proportional control Gain  0.1
-float Ki1 = 0.00001;                         // PID Derivitave control gain  0.03
-float Kp2 = 0.046; // PID proportional control Gain  0.1
-float Ki2 = 0.00001;                           // 0.03
+float Kp1 = 70.0;
+float Ki1 = 0.02;
+float Kp2 = 70.0;
+float Ki2 = 0.02;
 
 float outMax = 255.0;
 float outMin = 0.0;
@@ -44,6 +44,8 @@ unsigned int rpm1, rpm2;
 
 int speedAv = 0;
 
+unsigned long lastMillitime =0;
+unsigned long timechck = 0;
 void setup()
 {
 
@@ -52,7 +54,7 @@ void setup()
 
     // initialize i2c as slave
     Wire.begin(SLAVE_ADDRESS);
-	Wire.setClock(60000L);
+	  Wire.setClock(60000L);
     // define callbacks for i2c communication
     Wire.onReceive(receiveData);
     Wire.onRequest(sendData);
@@ -94,16 +96,16 @@ void setup()
 
 void loop()
 {
+
     sei(); // enable interupts
-   // getParams();                                               // check keyboard
+    //getParams();
     MotorData();
 
     if ((micros() - lastMilli) >= LOOPTIME) { // enter tmed loop
         lastMilli = micros();
-
         cli();
-        PWM_val1 = updatePid1(PWM_val1, speed_req1, rpm1); // compute PWM value
-        PWM_val2 = updatePid2(PWM_val2, speed_req2, rpm2); // compute PWM value  
+        PWM_val1 = updatePid1(speed_req1, rpm1); // compute PWM value
+        PWM_val2 = updatePid2(speed_req2, rpm2); // compute PWM value  
         
         if ((speed_req1 > 0) && (speed_req1 <= 550)) {
             //digitalWrite(InA1, HIGH);
@@ -158,8 +160,8 @@ void loop()
 		
         sei();
     }
-
-   // printInfo();             // display data
+	
+  //printInfo();
 }
 
 int speed_av( int rpmw1 , int rpmw2){
@@ -255,16 +257,6 @@ void sendData()
 
 void MotorData()
 {
-    /*                                         // calculate speed, volts and Amps
- static long countAnt1 = 0;
- static long countAnt2 = 0;                                      // last count
- cli();
- speed_act1 = (abs(count1 - countAnt1)*(60*(1000/LOOPTIME)))/(300); // 16 pulses X 29 gear ratio = 464 counts per output shaft rev
- countAnt1 = count1;  
- speed_act2 = (abs(count2 - countAnt2)*(60*(1000/LOOPTIME)))/(300);  // 16 pulses X 29 gear ratio = 464 counts per output shaft rev
- countAnt2 = count2;   
- sei();
-*/
     if (rev1 > 3) {
         cli(); //disable interrupts while we're calculating
         if (dTime1 > 0) //check for timer overflow
@@ -294,9 +286,9 @@ void MotorData()
     }
 }
 
-int updatePid1(int command, int targetValue, int currentValue)
-{ // compute PWM value
-    float pidTerm = 0; // PID correction
+int updatePid1(int targetValue, int currentValue)
+{
+    float pidTerm = 0;
     int error = 0;
     static float ITerm = 0;
 
@@ -306,17 +298,13 @@ int updatePid1(int command, int targetValue, int currentValue)
     else if(ITerm < outMin) ITerm = outMin;
 
     pidTerm = (Kp1 * error) + ITerm;
-   // if (pidTerm > 0)
     pidTerm += 0.5;
-   // else if (pidTerm < 0)
-   //     pidTerm -= 0.5;
-
-    return constrain(command + int(pidTerm), 0, 1023);
+    return constrain(int(pidTerm), 0, 1023);
 }
 
-int updatePid2(int command, int targetValue, int currentValue)
-{ // compute PWM value
-    float pidTerm = 0; // PID correction
+int updatePid2(int targetValue, int currentValue)
+{
+    float pidTerm = 0;
     int error = 0;
     static float ITerm = 0;
 
@@ -325,18 +313,14 @@ int updatePid2(int command, int targetValue, int currentValue)
     if(ITerm > outMax) ITerm = outMax;
     else if(ITerm < outMin) ITerm = outMin;
 
-    pidTerm = (Kp2 * error); // + ITerm;
-   /// if (pidTerm > 0)
+    pidTerm = (Kp2 * error) + ITerm;
     pidTerm += 0.5;
-    //else if (pidTerm < 0)
-    //    pidTerm -= 0.5;
-
-    return constrain(command + int(pidTerm), 0, 1023);
+    return constrain(int(pidTerm), 0, 1023);
 }
 
 void printInfo()
 {
-    if ((millis() - lastMilliPrint) >= 10) {
+    if ((millis() - lastMilliPrint) >= 50) {
         lastMilliPrint = millis();
         Serial.print("SP1:");
         Serial.print(speed_req1);
@@ -387,11 +371,13 @@ void rencoder2()
 int getParams()
 {
     char param, cmd;
-    if (!Serial.available()) return 0;
+    if (!Serial.available())
+        return 0;
     delay(10);
-    param = Serial.read();
-    if (!Serial.available()) return 0;
-    cmd = Serial.read();
+    param = Serial.read(); // get parameter byte
+    if (!Serial.available())
+        return 0;
+    cmd = Serial.read(); // get command byte
     Serial.flush();
     switch (param) {
     case 'v': // adjust speed
@@ -404,47 +390,23 @@ int getParams()
         if (cmd == '-') {
             speed_req1 -= 100;
             speed_req2 -= 100;
-            if (speed_req1 < 0) speed_req1 = 0;
-            if (speed_req2 < 0) speed_req2 = 0;
+            if (speed_req1 < -550) speed_req1 = -550;
+            if (speed_req2 < -550) speed_req2 = -550;
         }
-        break;
-
-    case 's': // adjust direction
-        if (cmd == '+') {
-            digitalWrite(InA1, LOW);
-            digitalWrite(InB1, HIGH);
-            digitalWrite(InA2, HIGH);
-            digitalWrite(InB2, LOW);
-        }
-        if (cmd == '-') {
-            digitalWrite(InA1, HIGH);
-            digitalWrite(InB1, LOW);
-            digitalWrite(InA2, LOW);
-            digitalWrite(InB2, HIGH);
-        }
-        break;
-
-    case 'o': // user should type "oo"
-        digitalWrite(InA1, LOW);
-        digitalWrite(InB1, LOW);
-        digitalWrite(InA2, LOW);
-        digitalWrite(InB2, LOW);
-        speed_req1 = 0;
-        speed_req2 = 0;
         break;
 		
-    case 'p': // adjust direction
-        if (cmd == '+') Kp2 += 0.001;
-        if (cmd == '-') Kp2 -= 0.001;
+	case 'p': // adjust direction
+        if (cmd == '+') Kp1 += 1.0;
+        if ((cmd == '-') && (Kp1 > 0)) Kp1 -= 1.0;
         Serial.print("                  Kp1: ");
-        Serial.println(Kp2,3);
+        Serial.println(Kp1,4);
         break;
 		
-    case 'i': // adjust direction
-        if (cmd == '+') Ki2 += 0.00001;
-        if (cmd == '-') Ki2 -= 0.00001;
+	case 'i': // adjust direction
+        if (cmd == '+') Ki1 += 0.001;
+        if (cmd == '-') Ki1 -= 0.001;
         Serial.print("                  Ki1: ");
-        Serial.println(Ki2,5);
+        Serial.println(Ki1,5);
         break;
 		
     default:
