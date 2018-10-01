@@ -1,6 +1,6 @@
 #include <Wire.h>
 
-#define SLAVE_ADDRESS 0x04 // arduino slave addr
+#define SLAVE_ADDRESS 0x09 // arduino slave addr
 
 #define InA1 7 // INA motor pin
 #define InB1 8 // INB motor pin
@@ -14,7 +14,7 @@
 #define encodPinA2 2 // encoder A pin
 #define encodPinB2 5 // encoder B pin
 
-#define LOOPTIME 5000 // PID loop time
+#define LOOPTIME 2000 // PID loop time
 
 unsigned long lastMilli = 0; // loop timing
 unsigned long lastMilliPrint = 0; // loop timing
@@ -28,13 +28,13 @@ int PWM_val2 = 0;
 //volatile long count1 = 0;                        // rev counter
 //volatile long count2 = 0;                        // rev counter
 
-float Kp1 = 70.0;
-float Ki1 = 0.02;
-float Kp2 = 70.0;
-float Ki2 = 0.02;
+float Kp1 = 0.7; // 2.0
+float Ki1 = 0.03; // 0.2
+float Kp2 = 0.7;
+float Ki2 = 0.03;
 
-float outMax = 255.0;
-float outMin = 0.0;
+float outMax = 1023.0;
+float outMin = -1023.0;
 
 byte receivedCommands[4] = { 0 };
 
@@ -54,7 +54,7 @@ void setup()
 
     // initialize i2c as slave
     Wire.begin(SLAVE_ADDRESS);
-	  Wire.setClock(60000L);
+	  Wire.setClock(400000L);
     // define callbacks for i2c communication
     Wire.onReceive(receiveData);
     Wire.onRequest(sendData);
@@ -103,65 +103,64 @@ void loop()
 
     if ((micros() - lastMilli) >= LOOPTIME) { // enter tmed loop
         lastMilli = micros();
-        cli();
-        PWM_val1 = updatePid1(speed_req1, rpm1); // compute PWM value
-        PWM_val2 = updatePid2(speed_req2, rpm2); // compute PWM value  
         
         if ((speed_req1 > 0) && (speed_req1 <= 550)) {
+            PWM_val1 = updatePid1(speed_req1, rpm1);
             //digitalWrite(InA1, HIGH);
             PORTD |= B10000000;	
             //digitalWrite(InB1, LOW);      
             PORTB &= B11111110;
-        }
+            }
         else if ((speed_req1 < 0) && (speed_req1 >= -550))  {
+	    PWM_val1 = updatePid1(speed_req1, rpm1);
             //digitalWrite(InA1, LOW);
             PORTD &= B01111111;
             //digitalWrite(InB1, HIGH);
             PORTB |= B00000001;
-        }
+            }
         else {
             //digitalWrite(InA1, LOW);
             PORTD &= B01111111;
             //digitalWrite(InB1, LOW);
             PORTB &= B11111110;
-        }
-				
+            }
+    				
         if ((speed_req2 > 0) && (speed_req2 <= 550)) {
+            PWM_val2 = updatePid2(speed_req2, rpm2);
             //digitalWrite(InA2, LOW);
-            PORTD &= B10111111;
+	    PORTD &= B10111111;
             //digitalWrite(InB2, HIGH);
-            PORTD |= B00010000;
-        }
+	    PORTD |= B00010000;
+            }
         else if ((speed_req2 < 0) && (speed_req2 >= -550))  {
+            PWM_val2 = updatePid2(speed_req2, rpm2);
             //digitalWrite(InA2, HIGH);
             PORTD |= B01000000;
             //digitalWrite(InB2, LOW);
             PORTD &= B11101111;
-        }
+
+            }
         else {
             //digitalWrite(InA2, LOW);
             PORTD &= B10111111;
             //digitalWrite(InB2, LOW);
             PORTD &= B11101111;
-        }
-
+            }
+        
         analogWrite16(PWM1, PWM_val1);
         analogWrite16(PWM2, PWM_val2);
 
         if (rpm1 <= 20) rpm1 = 0;
         if (rpm2 <= 20) rpm2 = 0;
         
-		    if (speed_req1 > 0  && speed_req2 > 0) speedAv = speed_av(rpm1,rpm2);
-		    else if (speed_req1 < 0  && speed_req2 < 0) speedAv = speed_av(-rpm1,-rpm2);
-		    else speedAv = 0;
-       
-		    //Serial.print("Av Speed: ");
-        //Serial.println(speedAv);
-		
-        sei();
+	if (speed_req1 > 0  && speed_req2 > 0) speedAv = speed_av(rpm1,rpm2);
+	else if (speed_req1 < 0  && speed_req2 < 0) speedAv = speed_av(-rpm1,-rpm2);
+	else speedAv = 0;
+        //sei();
     }
 	
   //printInfo();
+
 }
 
 int speed_av( int rpmw1 , int rpmw2){
@@ -174,7 +173,7 @@ int speed_av( int rpmw1 , int rpmw2){
 	
 	if (speedav > 0)
         speedav += 0.5;
-  else if (speedav < 0)
+  	else if (speedav < 0)
         speedav -= 0.5;
 		
 	return int(speedav);
@@ -207,32 +206,19 @@ void analogWrite16(uint8_t pin, uint16_t val)
 // callback for received data
 void receiveData(int byteCount)
 {
-    int s1 = 0;
-	int s2 = 0;
-
-    for (int a = 0; a < byteCount; a++) {
-        if (a < byteCount) { //4
+  int pckg = 4;
+  for (int a = 0; a < byteCount; a++) {
+        if (a < pckg) { //4
             receivedCommands[a] = Wire.read();
-            s1 = ((int)receivedCommands[0] | ((int)receivedCommands[1]) << 8);
-			      s2 = ((int)receivedCommands[2] | ((int)receivedCommands[3]) << 8);
         }
         else {
 			      while (Wire.available () > 0) Wire.read(); // if we receive more data then allowed just throw it away
         }
+    
     }
+  speed_req1 = ((int)receivedCommands[0] | ((int)receivedCommands[1]) << 8);
+  speed_req2 = ((int)receivedCommands[2] | ((int)receivedCommands[3]) << 8);
 
-    //Print the Int out.
-    /*
-    Serial.print("Speed s1, s2: ");
-    Serial.print(s1);
-    Serial.print(", ");
-	  Serial.print(s2);
-	  Serial.print(", ");
-    Serial.println(byteCount);
-    */
-	
-    speed_req1 = s1;
-	speed_req2 = s2;
 }
 
 // callback for sending data
@@ -257,6 +243,16 @@ void sendData()
 
 void MotorData()
 {
+    /*                                         // calculate speed, volts and Amps
+ static long countAnt1 = 0;
+ static long countAnt2 = 0;                                      // last count
+ cli();
+ speed_act1 = (abs(count1 - countAnt1)*(60*(1000/LOOPTIME)))/(300); // 16 pulses X 29 gear ratio = 464 counts per output shaft rev
+ countAnt1 = count1;  
+ speed_act2 = (abs(count2 - countAnt2)*(60*(1000/LOOPTIME)))/(300);  // 16 pulses X 29 gear ratio = 464 counts per output shaft rev
+ countAnt2 = count2;   
+ sei();
+*/
     if (rev1 > 3) {
         cli(); //disable interrupts while we're calculating
         if (dTime1 > 0) //check for timer overflow
@@ -275,51 +271,64 @@ void MotorData()
     }
 
     if (rev2 > 3) {
-        cli(); //disable interrupts while we're calculating
+        cli();
         if (dTime2 > 0) //check for timer overflow
         {
             rev2 -= 1; //subtract one since the first revolution is not measured
             rpm2 = ((60000000 * rev2) / (dTime2)) / 300;
             rev2 = 0;
         }
-        sei(); //re-enable interrupts
+        sei();
     }
 }
 
 int updatePid1(int targetValue, int currentValue)
 {
-    float pidTerm = 0;
-    int error = 0;
     static float ITerm = 0;
-
-    error = abs(targetValue) - abs(currentValue);
+    static int lastCurrentValue = 0;
+    
+    int error = abs(targetValue) - currentValue;
+    int dterm = currentValue - lastCurrentValue;
     ITerm += Ki1 * error;
+    ITerm -= Kp1 * dterm;
     if(ITerm > outMax) ITerm = outMax;
     else if(ITerm < outMin) ITerm = outMin;
 
-    pidTerm = (Kp1 * error) + ITerm;
+    float pidTerm = ITerm;
+   // if (pidTerm > 0)
     pidTerm += 0.5;
+   // else if (pidTerm < 0)
+   //     pidTerm -= 0.5;
+   lastCurrentValue  = currentValue;
+   //Serial.println(pidTerm);
     return constrain(int(pidTerm), 0, 1023);
 }
 
 int updatePid2(int targetValue, int currentValue)
 {
-    float pidTerm = 0;
-    int error = 0;
-    static float ITerm = 0;
 
-    error = abs(targetValue) - abs(currentValue);
-    ITerm += (Ki2 * error);
+    static float ITerm = 0;
+	static int lastCurrentValue = 0;
+
+    int error = abs(targetValue) - currentValue;
+	int dterm = currentValue - lastCurrentValue;
+    ITerm += Ki2 * error;
+	ITerm -= Kp2 * dterm;
     if(ITerm > outMax) ITerm = outMax;
     else if(ITerm < outMin) ITerm = outMin;
 
-    pidTerm = (Kp2 * error) + ITerm;
+    float pidTerm = ITerm;
+   // if (pidTerm > 0)
     pidTerm += 0.5;
+    //else if (pidTerm < 0)
+    //    pidTerm -= 0.5;
+	lastCurrentValue  = currentValue;
+
     return constrain(int(pidTerm), 0, 1023);
 }
 
 void printInfo()
-{
+{ // display data
     if ((millis() - lastMilliPrint) >= 50) {
         lastMilliPrint = millis();
         Serial.print("SP1:");
@@ -382,34 +391,58 @@ int getParams()
     switch (param) {
     case 'v': // adjust speed
         if (cmd == '+') {
-            speed_req1 += 100;
-            speed_req2 += 100;
+            speed_req1 += 20;
+            speed_req2 += 20;
             if (speed_req1 > 550) speed_req1 = 550;
             if (speed_req2 > 550) speed_req2 = 550;
         }
         if (cmd == '-') {
-            speed_req1 -= 100;
-            speed_req2 -= 100;
+            speed_req1 -= 20;
+            speed_req2 -= 20;
             if (speed_req1 < -550) speed_req1 = -550;
             if (speed_req2 < -550) speed_req2 = -550;
         }
         break;
+
+    case 's': // adjust direction
+        if (cmd == '+') {
+            digitalWrite(InA1, LOW);
+            digitalWrite(InB1, HIGH);
+            digitalWrite(InA2, HIGH);
+            digitalWrite(InB2, LOW);
+        }
+        if (cmd == '-') {
+            digitalWrite(InA1, HIGH);
+            digitalWrite(InB1, LOW);
+            digitalWrite(InA2, LOW);
+            digitalWrite(InB2, HIGH);
+        }
+        break;
+
+    case 'o': // user should type "oo"
+        digitalWrite(InA1, LOW);
+        digitalWrite(InB1, LOW);
+        digitalWrite(InA2, LOW);
+        digitalWrite(InB2, LOW);
+        speed_req1 = 0;
+        speed_req2 = 0;
+        break;
 		
 	case 'p': // adjust direction
-        if (cmd == '+') Kp1 += 1.0;
-        if ((cmd == '-') && (Kp1 > 0)) Kp1 -= 1.0;
+        if (cmd == '+') Kp1 += 0.1;
+        if ((cmd == '-') && (Kp1 > 0)) Kp1 -= 0.1;
         Serial.print("                  Kp1: ");
         Serial.println(Kp1,4);
         break;
 		
 	case 'i': // adjust direction
-        if (cmd == '+') Ki1 += 0.001;
-        if (cmd == '-') Ki1 -= 0.001;
+        if (cmd == '+') Ki1 += 0.01;
+        if (cmd == '-') Ki1 -= 0.01;
         Serial.print("                  Ki1: ");
         Serial.println(Ki1,5);
         break;
 		
     default:
-        Serial.println("???");
+        Serial.println("..");
     }
 }
